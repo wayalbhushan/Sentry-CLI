@@ -122,38 +122,38 @@ Available Commands (enter number or command name):
   3.  help           - Display this context-aware help menu
   4.  exit           - Quit the application
 
-b. Launch app & Register alice:
+b. Launch app & Register bhushan:
 === Secure Auth CLI ===
 Containerized CLI authentication system with optional 2FA and session management
 
 Database ready
 
-auth> register alice
+auth> register bhushan
 Enter password: 
 Registration successful! You can now log in using 'login'.
 ```
 ![Welcome Banner & Theme](docs/screenshots/banner-colors.png)
 
 ```text
-c. Register alice again (immediate duplicate rejection before password prompt):
-auth> register alice
-Error: user 'alice' already exists. Try logging in using 'login alice'
+c. Register bhushan again (immediate duplicate rejection before password prompt):
+auth> register bhushan
+Error: user 'bhushan' already exists. Try logging in using 'login bhushan'
 
-d. Login as alice (auto-displayed detail block, MFA Disabled):
-auth> login alice
+d. Login as bhushan (auto-displayed detail block, MFA Disabled):
+auth> login bhushan
 Enter password: 
-Logged in as alice
+Logged in as bhushan
 
-  Username:            alice
+  Username:            bhushan
   Registered:          2026-07-31 15:10:09 IST
   MFA Status:          Disabled
   Session Expires:     2026-07-31 15:25:44 IST
   Last Login:          2026-07-31 15:10:44 IST
 
-alice@auth> 
+bhushan@auth> 
 
 e. Context-aware help (post-login):
-alice@auth> help
+bhushan@auth> help
 Available Commands (enter number or command name):
   1.  whoami         - Display active user session details
   2.  enable-2fa     - Enable TOTP 2FA multi-factor authentication
@@ -163,16 +163,16 @@ Available Commands (enter number or command name):
   6.  exit           - Quit the application
 
 f. whoami command:
-alice@auth> whoami
+bhushan@auth> whoami
 
-  Username:            alice
+  Username:            bhushan
   Registered:          2026-07-31 15:10:09 IST
   MFA Status:          Disabled
   Session Expires:     2026-07-31 15:25:44 IST
   Last Login:          2026-07-31 15:10:44 IST
 
 g. Enable 2FA (password re-authentication, QR code rendering, secret key, passcode verification):
-alice@auth> enable-2fa
+bhushan@auth> enable-2fa
 Enter your current password to confirm enabling 2FA: 
 
 Scan the QR code below with your authenticator app (Google Authenticator / Authy):
@@ -197,16 +197,16 @@ Enter the 6-digit code from your authenticator app to confirm: 178904
 
 ```text
 h. Logout:
-alice@auth> logout
+bhushan@auth> logout
 Logged out successfully.
 
-i. Login as alice with 2FA enabled (prompts for TOTP code, auto-display shows MFA Status: Enabled):
-auth> login alice
+i. Login as bhushan with 2FA enabled (prompts for TOTP code, auto-display shows MFA Status: Enabled):
+auth> login bhushan
 Enter password: 
 Enter your 6-digit authenticator code: 178904
-Logged in as alice
+Logged in as bhushan
 
-  Username:            alice
+  Username:            bhushan
   Registered:          2026-07-31 15:10:09 IST
   MFA Status:          Enabled
   Session Expires:     2026-07-31 15:30:00 IST
@@ -216,12 +216,12 @@ Logged in as alice
 
 ```text
 j. Disable 2FA (requires password re-authentication):
-alice@auth> disable-2fa
+bhushan@auth> disable-2fa
 Enter your current password to confirm disabling 2FA: 
 2FA disabled successfully.
 
 k. Logout and Exit:
-alice@auth> logout
+bhushan@auth> logout
 Logged out successfully.
 
 auth> exit
@@ -234,18 +234,18 @@ Goodbye!
 
 ### Wrong Password Rejection
 ```text
-auth> login alice
+auth> login bhushan
 Enter password: 
 Error: invalid username or password. Please check your credentials and try again.
 ```
 
 ### Account Lockout Protection
 ```text
-auth> login alice
+auth> login bhushan
 Enter password: 
 Error: invalid username or password. Please check your credentials and try again.
 ...
-auth> login alice
+auth> login bhushan
 Enter password: 
 Error: account is locked due to multiple failed login attempts. Try again after 15:26:18 IST
 ```
@@ -253,7 +253,7 @@ Error: account is locked due to multiple failed login attempts. Try again after 
 
 ### Session Expiration Rejection
 ```text
-alice@auth> whoami
+bhushan@auth> whoami
 Error: session expired or invalid, please log in again
 
 auth> 
