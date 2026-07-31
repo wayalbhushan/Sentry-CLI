@@ -24,27 +24,29 @@
 ## 3. Architecture
 
 ```text
-secure-auth-cli/
-├── cmd/
-│   └── cli/
-│       └── main.go           # Application entrypoint & dependency wiring
-├── internal/
-│   ├── auth/                 # User registration, bcrypt hashing, login, & lockout state
-│   ├── db/                   # Pure-Go SQLite connection pool & embedded SQL migration runner
-│   ├── session/              # 32-byte token generation, validation, & lazy session cleanup
-│   ├── shell/                # Interactive REPL shell, readline integration, & command routing
-│   └── totp/                 # RFC 6238 TOTP secret generation, validation, & ANSI QR code rendering
-├── migrations/
-│   ├── 0001_init.sql         # Initial DDL table schema for users, sessions, & migrations
-│   └── migrations.go         # go:embed package directive embedding SQL files into binary
-├── tests/
-│   └── e2e_tests.sh          # Scenario-based expect test harness for automated E2E testing
-├── .dockerignore              # Docker build context exclusions
-├── .gitignore                # Binary, database, and local environment git exclusions
-├── Dockerfile                # Multi-stage CGo-free Alpine container build specification
-├── docker-compose.yml        # Docker Compose configuration with interactive TTY and volume
-├── go.mod                    # Go module definition
-└── go.sum                    # Dependency checksum manifest
+.
+|-- cmd/
+|   `-- cli/
+|       `-- main.go           # Application entrypoint & dependency wiring
+|-- internal/
+|   |-- auth/                 # User registration, bcrypt hashing, login, & lockout state
+|   |-- db/                   # Pure-Go SQLite connection pool & embedded SQL migration runner
+|   |-- session/              # 32-byte token generation, validation, & lazy session cleanup
+|   |-- shell/                # Interactive REPL shell, readline integration, & command routing
+|   `-- totp/                 # RFC 6238 TOTP secret generation, validation, & ANSI QR code rendering
+|-- migrations/
+|   |-- 0001_init.sql         # Initial DDL table schema for users, sessions, & migrations
+|   `-- migrations.go         # go:embed package directive embedding SQL files into binary
+|-- tests/
+|   `-- e2e_tests.sh          # Scenario-based expect test harness for automated E2E testing
+|-- docs/
+|   `-- screenshots/          # Documentation walkthrough image assets
+|-- .dockerignore              # Docker build context exclusions
+|-- .gitignore                # Binary, database, and local environment git exclusions
+|-- Dockerfile                # Multi-stage CGo-free Alpine container build specification
+|-- docker-compose.yml        # Docker Compose configuration with interactive TTY and volume
+|-- go.mod                    # Go module definition
+`-- go.sum                    # Dependency checksum manifest
 ```
 
 ### Internal Package Purposes (`internal/`)
@@ -60,7 +62,7 @@ secure-auth-cli/
 
 ### Docker (Primary Path)
 
-Run the application inside a containerized Alpine environment with persistent volume storage. **Note**: The container must be executed attached (without `-d`) because `secure-auth-cli` is an interactive TTY application.
+Run the application inside a containerized Alpine environment with persistent volume storage directly from the repository root. **Note**: The container must be executed attached (without `-d`) because `secure-auth-cli` is an interactive TTY application.
 
 ```bash
 docker-compose up --build
@@ -92,10 +94,9 @@ auth>
 
 ### Local Development Path
 
-Ensure Go 1.24+ is installed locally, then run:
+Ensure Go 1.24+ is installed locally, then run directly from the repository root:
 
 ```bash
-cd secure-auth-cli
 go run cmd/cli/main.go
 ```
 
@@ -274,7 +275,7 @@ auth> exit
 
 # Step 2: Tear down container network
 docker-compose down
-Network secure-auth-cli_default Removed
+Network sentrycli_default Removed
 
 # Step 3: Re-launch attached container and verify login persistence
 docker-compose up
@@ -283,10 +284,10 @@ Enter password: Pass1234!
 Logged in as dockeruser
 
   Username:            dockeruser
-  Registered:          2026-07-31 09:45:38 UTC
+  Registered:          2026-07-31 10:38:02 UTC
   MFA Status:          Disabled
-  Session Expires:     2026-07-31 10:01:17 UTC
-  Last Login:          2026-07-31 09:46:17 UTC
+  Session Expires:     2026-07-31 10:53:26 UTC
+  Last Login:          2026-07-31 10:38:26 UTC
 ```
 ![Docker Compose Containerized Execution](docs/screenshots/docker-compose-up.png)
 
@@ -338,11 +339,11 @@ go test -v ./...
 **Captured Test Output:**
 ```text
 === RUN   TestRegister
---- PASS: TestRegister (0.16s)
+--- PASS: TestRegister (0.14s)
 === RUN   TestLoginAndLockout
---- PASS: TestLoginAndLockout (0.47s)
+--- PASS: TestLoginAndLockout (0.43s)
 PASS
-ok  	secure-auth-cli/internal/auth	2.252s
+ok  	secure-auth-cli/internal/auth	2.265s
 
 === RUN   TestCreateAndValidateSession
 --- PASS: TestCreateAndValidateSession (0.00s)
@@ -351,14 +352,14 @@ ok  	secure-auth-cli/internal/auth	2.252s
 === RUN   TestLogout
 --- PASS: TestLogout (0.00s)
 PASS
-ok  	secure-auth-cli/internal/session	1.933s
+ok  	secure-auth-cli/internal/session	1.959s
 
 === RUN   TestGenerateSecretAndValidate
 --- PASS: TestGenerateSecretAndValidate (0.00s)
 PASS
-ok  	secure-auth-cli/internal/totp	1.100s
+ok  	secure-auth-cli/internal/totp	1.021s
 ```
 
-### End-to-End Expect Test Harness ([tests/e2e_tests.sh](file:///c:/Users/wayal/Desktop/Sentry%20CLI/secure-auth-cli/tests/e2e_tests.sh))
+### End-to-End Expect Test Harness ([tests/e2e_tests.sh](file:///c:/Users/wayal/Desktop/Sentry%20CLI/tests/e2e_tests.sh))
 
 The repository includes an 18-scenario POSIX Bash test harness driven by `expect` for interactive TTY verification (`chmod +x tests/e2e_tests.sh && ./tests/e2e_tests.sh`), covering the full CLI user flow across registration, login, lockout, 2FA, session expiration, and clean termination.

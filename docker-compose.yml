@@ -3,7 +3,7 @@ version: '3.8'
 services:
   secure-auth-cli:
     build:
-      context: ./secure-auth-cli
+      context: .
       dockerfile: Dockerfile
     image: secure-auth-cli:latest
     container_name: secure-auth-cli
