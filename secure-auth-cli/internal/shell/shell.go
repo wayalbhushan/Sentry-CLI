@@ -33,7 +33,8 @@ func New(db *sql.DB, rl *readline.Instance) *Shell {
 		db: db,
 		rl: rl,
 
-		promptColor:   color.New(color.FgCyan, color.Bold).SprintFunc(),
+		// Darker rich blue for prompt visibility contrasting against white text
+		promptColor:   color.New(color.FgBlue, color.Bold).SprintFunc(),
 		statusColor:   color.New(color.FgGreen, color.Bold).SprintfFunc(),
 		errorColor:    color.New(color.FgRed, color.Bold).SprintfFunc(),
 		infoColor:     color.New(color.FgYellow, color.Bold).SprintfFunc(),
@@ -195,6 +196,17 @@ func (s *Shell) handleRegister(args []string) {
 
 	if username == "" {
 		fmt.Println(s.errorColor("Error: Username cannot be empty."))
+		return
+	}
+
+	// Check if username exists immediately before asking for password
+	exists, err := auth.UserExists(s.db, username)
+	if err != nil {
+		fmt.Println(s.errorColor("Error: Failed to verify username: %v", err))
+		return
+	}
+	if exists {
+		fmt.Println(s.errorColor("Error: user '%s' already exists. Try logging in using 'login %s'", username, username))
 		return
 	}
 

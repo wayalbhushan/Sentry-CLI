@@ -46,6 +46,20 @@ func getEnvInt(key string, defaultValue int) int {
 	return val
 }
 
+// UserExists checks if a username is already registered in the database.
+func UserExists(db *sql.DB, username string) (bool, error) {
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return false, nil
+	}
+	var exists bool
+	err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE username = ?)", username).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("failed to check username existence: %w", err)
+	}
+	return exists, nil
+}
+
 // Register creates a new user account with a bcrypt hashed password.
 func Register(db *sql.DB, username, password string) error {
 	username = strings.TrimSpace(username)
@@ -57,10 +71,9 @@ func Register(db *sql.DB, username, password string) error {
 	}
 
 	// Check if username already exists
-	var exists bool
-	err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE username = ?)", username).Scan(&exists)
+	exists, err := UserExists(db, username)
 	if err != nil {
-		return fmt.Errorf("failed to check username existence: %w", err)
+		return err
 	}
 	if exists {
 		return fmt.Errorf("user '%s' already exists. Try logging in using 'login %s'", username, username)
