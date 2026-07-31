@@ -60,6 +60,34 @@ func UserExists(db *sql.DB, username string) (bool, error) {
 	return exists, nil
 }
 
+// GetUserByID fetches a User record by primary key ID.
+func GetUserByID(db *sql.DB, id int64) (*User, error) {
+	var user User
+	query := `
+	SELECT id, username, password_hash, totp_secret, totp_enabled, created_at, last_login_at, failed_login_attempts, locked_until
+	FROM users
+	WHERE id = ?;`
+
+	err := db.QueryRow(query, id).Scan(
+		&user.ID,
+		&user.Username,
+		&user.PasswordHash,
+		&user.TOTPSecret,
+		&user.TOTPEnabled,
+		&user.CreatedAt,
+		&user.LastLoginAt,
+		&user.FailedLoginAttempts,
+		&user.LockedUntil,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, errors.New("user not found")
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to query user by ID: %w", err)
+	}
+
+	return &user, nil
+}
+
 // Register creates a new user account with a bcrypt hashed password.
 func Register(db *sql.DB, username, password string) error {
 	username = strings.TrimSpace(username)

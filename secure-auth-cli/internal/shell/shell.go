@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"secure-auth-cli/internal/auth"
+	"secure-auth-cli/internal/session"
 
 	"github.com/ergochat/readline"
 	"github.com/fatih/color"
@@ -15,10 +16,10 @@ import (
 
 // Shell encapsulates the state and dependencies of the interactive CLI session.
 type Shell struct {
-	db          *sql.DB
-	rl          *readline.Instance
-	currentUser *auth.User
-	isLoggedIn  bool
+	db           *sql.DB
+	rl           *readline.Instance
+	currentUser  *auth.User
+	sessionToken string
 
 	promptColor   func(a ...interface{}) string
 	statusColor   func(format string, a ...interface{}) string
@@ -81,13 +82,32 @@ func (s *Shell) Run() error {
 	return nil
 }
 
-// updatePrompt refreshes the REPL prompt string based on authentication state.
+// updatePrompt refreshes the REPL prompt string based on session authentication state.
 func (s *Shell) updatePrompt() {
-	if s.isLoggedIn && s.currentUser != nil {
+	if s.sessionToken != "" && s.currentUser != nil {
 		s.rl.SetPrompt(fmt.Sprintf("%s@auth> ", s.currentUser.Username))
 	} else {
 		s.rl.SetPrompt("auth> ")
 	}
+}
+
+// checkSession validates the active session token before executing post-login commands.
+// If invalid or expired, clears session state, prints red error message, and resets prompt.
+func (s *Shell) checkSession() bool {
+	if s.sessionToken == "" {
+		return false
+	}
+
+	_, err := session.ValidateSession(s.db, s.sessionToken)
+	if err != nil {
+		fmt.Println(s.errorColor("Error: %v", err))
+		s.sessionToken = ""
+		s.currentUser = nil
+		s.updatePrompt()
+		return false
+	}
+
+	return true
 }
 
 // readPassword prompts for a password with a visible prompt and masked terminal echo.
@@ -122,36 +142,50 @@ func (s *Shell) dispatchCommand(cmd string, args []string) {
 		s.handleHelp()
 
 	case "register":
-		if s.isLoggedIn {
+		if s.sessionToken != "" {
+			if !s.checkSession() {
+				s.handleRegister(args)
+				return
+			}
 			fmt.Println(s.errorColor("Error: You are already logged in. Please logout first to register a new account."))
 			return
 		}
 		s.handleRegister(args)
 
 	case "login":
-		if s.isLoggedIn {
+		if s.sessionToken != "" {
+			if !s.checkSession() {
+				s.handleLogin(args)
+				return
+			}
 			fmt.Println(s.errorColor("Error: You are already logged in as %s.", s.currentUser.Username))
 			return
 		}
 		s.handleLogin(args)
 
 	case "whoami":
-		if !s.isLoggedIn {
-			fmt.Println(s.errorColor("Error: unrecognized command: whoami (please login first)"))
+		if !s.checkSession() {
+			if s.sessionToken == "" {
+				fmt.Println(s.errorColor("Error: unrecognized command: whoami (please login first)"))
+			}
 			return
 		}
 		s.handleWhoAmI()
 
 	case "logout":
-		if !s.isLoggedIn {
-			fmt.Println(s.errorColor("Error: unrecognized command: logout (no active session)"))
+		if !s.checkSession() {
+			if s.sessionToken == "" {
+				fmt.Println(s.errorColor("Error: unrecognized command: logout (no active session)"))
+			}
 			return
 		}
 		s.handleLogout()
 
 	case "enable-2fa", "disable-2fa":
-		if !s.isLoggedIn {
-			fmt.Println(s.errorColor("Error: unrecognized command: %s (please login first)", cmd))
+		if !s.checkSession() {
+			if s.sessionToken == "" {
+				fmt.Println(s.errorColor("Error: unrecognized command: %s (please login first)", cmd))
+			}
 			return
 		}
 		fmt.Println(s.infoColor("[%s] TOTP 2FA will be implemented in Phase 4.", cmd))
@@ -163,8 +197,9 @@ func (s *Shell) dispatchCommand(cmd string, args []string) {
 
 // handleHelp displays commands appropriate for current session state.
 func (s *Shell) handleHelp() {
+	isLoggedIn := s.sessionToken != "" && s.checkSession()
 	fmt.Println(s.infoColor("Available commands:"))
-	if !s.isLoggedIn {
+	if !isLoggedIn {
 		fmt.Println("  register     - Register a new user account")
 		fmt.Println("  login        - Login with username and password")
 		fmt.Println("  help         - Display this help menu")
@@ -224,7 +259,7 @@ func (s *Shell) handleRegister(args []string) {
 	fmt.Println(s.statusColor("Registration successful! You can now log in using 'login'."))
 }
 
-// handleLogin prompts for credentials, verifies bcrypt hash, and transitions to post-login state.
+// handleLogin prompts for credentials, verifies bcrypt hash, creates DB session, and transitions state.
 func (s *Shell) handleLogin(args []string) {
 	var username string
 	if len(args) > 0 {
@@ -256,8 +291,14 @@ func (s *Shell) handleLogin(args []string) {
 		return
 	}
 
+	sess, err := session.CreateSession(s.db, user.ID)
+	if err != nil {
+		fmt.Println(s.errorColor("Error: Failed to create session: %v", err))
+		return
+	}
+
+	s.sessionToken = sess.Token
 	s.currentUser = user
-	s.isLoggedIn = true
 	s.updatePrompt()
 
 	fmt.Println(s.statusColor("Logged in as %s", user.Username))
@@ -275,10 +316,13 @@ func (s *Shell) handleWhoAmI() {
 	}
 }
 
-// handleLogout ends the active user session.
+// handleLogout ends the active user session in database and resets shell state.
 func (s *Shell) handleLogout() {
+	if s.sessionToken != "" {
+		_ = session.Logout(s.db, s.sessionToken)
+	}
+	s.sessionToken = ""
 	s.currentUser = nil
-	s.isLoggedIn = false
 	s.updatePrompt()
 	fmt.Println(s.statusColor("Logged out successfully."))
 }
