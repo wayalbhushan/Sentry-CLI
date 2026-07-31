@@ -23,6 +23,7 @@ type Shell struct {
 	promptColor   func(a ...interface{}) string
 	statusColor   func(format string, a ...interface{}) string
 	errorColor    func(format string, a ...interface{}) string
+	infoColor     func(format string, a ...interface{}) string
 	farewellColor func(format string, a ...interface{}) string
 }
 
@@ -33,9 +34,10 @@ func New(db *sql.DB, rl *readline.Instance) *Shell {
 		rl: rl,
 
 		promptColor:   color.New(color.FgCyan, color.Bold).SprintFunc(),
-		statusColor:   color.New(color.FgGreen).SprintfFunc(),
-		errorColor:    color.New(color.FgRed).SprintfFunc(),
-		farewellColor: color.New(color.FgGreen).SprintfFunc(),
+		statusColor:   color.New(color.FgGreen, color.Bold).SprintfFunc(),
+		errorColor:    color.New(color.FgRed, color.Bold).SprintfFunc(),
+		infoColor:     color.New(color.FgYellow, color.Bold).SprintfFunc(),
+		farewellColor: color.New(color.FgGreen, color.Bold).SprintfFunc(),
 	}
 }
 
@@ -120,47 +122,47 @@ func (s *Shell) dispatchCommand(cmd string, args []string) {
 
 	case "register":
 		if s.isLoggedIn {
-			fmt.Println(s.errorColor("You are already logged in. Please logout to register a new account."))
+			fmt.Println(s.errorColor("Error: You are already logged in. Please logout first to register a new account."))
 			return
 		}
 		s.handleRegister(args)
 
 	case "login":
 		if s.isLoggedIn {
-			fmt.Println(s.errorColor("You are already logged in as %s.", s.currentUser.Username))
+			fmt.Println(s.errorColor("Error: You are already logged in as %s.", s.currentUser.Username))
 			return
 		}
 		s.handleLogin(args)
 
 	case "whoami":
 		if !s.isLoggedIn {
-			fmt.Println(s.errorColor("unrecognized command: whoami (please login first)"))
+			fmt.Println(s.errorColor("Error: unrecognized command: whoami (please login first)"))
 			return
 		}
 		s.handleWhoAmI()
 
 	case "logout":
 		if !s.isLoggedIn {
-			fmt.Println(s.errorColor("unrecognized command: logout (no active session)"))
+			fmt.Println(s.errorColor("Error: unrecognized command: logout (no active session)"))
 			return
 		}
 		s.handleLogout()
 
 	case "enable-2fa", "disable-2fa":
 		if !s.isLoggedIn {
-			fmt.Println(s.errorColor("unrecognized command: %s (please login first)", cmd))
+			fmt.Println(s.errorColor("Error: unrecognized command: %s (please login first)", cmd))
 			return
 		}
-		fmt.Println(s.statusColor("[%s] TOTP 2FA will be implemented in Phase 4.", cmd))
+		fmt.Println(s.infoColor("[%s] TOTP 2FA will be implemented in Phase 4.", cmd))
 
 	default:
-		fmt.Println(s.errorColor("unrecognized command: %s", cmd))
+		fmt.Println(s.errorColor("Error: unrecognized command: %s", cmd))
 	}
 }
 
 // handleHelp displays commands appropriate for current session state.
 func (s *Shell) handleHelp() {
-	fmt.Println("Available commands:")
+	fmt.Println(s.infoColor("Available commands:"))
 	if !s.isLoggedIn {
 		fmt.Println("  register     - Register a new user account")
 		fmt.Println("  login        - Login with username and password")
@@ -192,18 +194,18 @@ func (s *Shell) handleRegister(args []string) {
 	}
 
 	if username == "" {
-		fmt.Println(s.errorColor("Username cannot be empty."))
+		fmt.Println(s.errorColor("Error: Username cannot be empty."))
 		return
 	}
 
 	password, err := s.readPassword("Enter password: ")
 	if err != nil {
-		fmt.Println(s.errorColor("Failed to read password: %v", err))
+		fmt.Println(s.errorColor("Error: Failed to read password: %v", err))
 		return
 	}
 
 	if err := auth.Register(s.db, username, password); err != nil {
-		fmt.Println(s.errorColor("Registration failed: %v", err))
+		fmt.Println(s.errorColor("Error: %v", err))
 		return
 	}
 
@@ -226,19 +228,19 @@ func (s *Shell) handleLogin(args []string) {
 	}
 
 	if username == "" {
-		fmt.Println(s.errorColor("Username cannot be empty."))
+		fmt.Println(s.errorColor("Error: Username cannot be empty."))
 		return
 	}
 
 	password, err := s.readPassword("Enter password: ")
 	if err != nil {
-		fmt.Println(s.errorColor("Failed to read password: %v", err))
+		fmt.Println(s.errorColor("Error: Failed to read password: %v", err))
 		return
 	}
 
 	user, err := auth.Login(s.db, username, password)
 	if err != nil {
-		fmt.Println(s.errorColor("Login failed: %v", err))
+		fmt.Println(s.errorColor("Error: %v", err))
 		return
 	}
 

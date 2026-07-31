@@ -3,6 +3,7 @@ package auth_test
 import (
 	"database/sql"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -50,8 +51,8 @@ func TestRegister(t *testing.T) {
 
 	// Test duplicate registration error
 	err = auth.Register(database, "testuser", "anotherpass")
-	if err == nil {
-		t.Error("Expected error when registering duplicate username, got nil")
+	if err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("Expected error containing 'already exists', got: %v", err)
 	}
 
 	// Test empty credentials error
@@ -93,7 +94,7 @@ func TestLoginAndLockout(t *testing.T) {
 	// Test failed login attempts up to threshold (3)
 	for i := 1; i <= 2; i++ {
 		_, err := auth.Login(database, username, "wrongpassword")
-		if err == nil || err.Error() != "invalid username or password" {
+		if err == nil || !strings.Contains(err.Error(), "invalid username or password") {
 			t.Errorf("Attempt %d: expected generic 'invalid username or password', got: %v", i, err)
 		}
 	}
@@ -106,8 +107,8 @@ func TestLoginAndLockout(t *testing.T) {
 
 	// 4th attempt while locked should return lockout error message
 	_, err = auth.Login(database, username, password)
-	if err == nil {
-		t.Error("Expected lockout error even with correct password while locked")
+	if err == nil || !strings.Contains(err.Error(), "account is locked") {
+		t.Errorf("Expected lockout error containing 'account is locked', got: %v", err)
 	}
 
 	// Fast-forward lockout in DB for testing recovery

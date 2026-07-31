@@ -63,7 +63,7 @@ func Register(db *sql.DB, username, password string) error {
 		return fmt.Errorf("failed to check username existence: %w", err)
 	}
 	if exists {
-		return errors.New("username is already taken")
+		return fmt.Errorf("user '%s' already exists. Try logging in using 'login %s'", username, username)
 	}
 
 	// Hash password using bcrypt with cost 10
@@ -88,7 +88,7 @@ func Register(db *sql.DB, username, password string) error {
 func Login(db *sql.DB, username, password string) (*User, error) {
 	username = strings.TrimSpace(username)
 	if username == "" || password == "" {
-		return nil, errors.New("invalid username or password")
+		return nil, errors.New("invalid username or password. Please check your credentials and try again.")
 	}
 
 	lockoutThreshold := getEnvInt("LOCKOUT_THRESHOLD", DefaultLockoutThreshold)
@@ -113,8 +113,8 @@ func Login(db *sql.DB, username, password string) (*User, error) {
 		&user.LockedUntil,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
-		// Generic error to prevent username enumeration
-		return nil, errors.New("invalid username or password")
+		// Generic error to prevent username enumeration while providing user feedback
+		return nil, errors.New("invalid username or password. Please check your credentials and try again.")
 	} else if err != nil {
 		return nil, fmt.Errorf("database query failed during login: %w", err)
 	}
@@ -144,7 +144,7 @@ func Login(db *sql.DB, username, password string) (*User, error) {
 			}
 		}
 
-		return nil, errors.New("invalid username or password")
+		return nil, errors.New("invalid username or password. Please check your credentials and try again.")
 	}
 
 	// On successful password match: reset failed login attempts, clear lockout, update last login time
