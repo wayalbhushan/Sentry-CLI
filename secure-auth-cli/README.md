@@ -4,31 +4,31 @@
 [![Docker Support](https://img.shields.io/badge/Docker-Multi--Stage-2496ED?style=flat-square&logo=docker)](https://www.docker.com/)
 [![SQLite Engine](https://img.shields.io/badge/Database-SQLite%20(Pure--Go)-003B57?style=flat-square&logo=sqlite)](https://modernc.org/sqlite)
 
-## Overview
+## 1. Overview
 
-`secure-auth-cli` is a production-grade, containerized command-line authentication system written in Go, featuring user registration, bcrypt password hashing, account lockout protection, token-backed session management, and Google Authenticator-compatible RFC 6238 TOTP 2FA. Built specifically for Osto's Golang Backend Intern take-home assignment, it operates entirely as an interactive REPL shell with zero external CGo dependencies. The project includes embedded database migrations, multi-stage Docker compilation, and a scenario-based E2E test harness.
+`secure-auth-cli` is a production-grade, containerized command-line authentication system written in Go, featuring user registration, bcrypt password hashing, account lockout protection, token-backed session management, and Google Authenticator-compatible RFC 6238 TOTP 2FA. Built specifically for Osto's Golang Backend Intern take-home assignment, it operates entirely as an interactive REPL shell with zero CGo compiler dependencies. The project includes embedded database migrations, multi-stage Docker containerization, and a scenario-based E2E test harness.
 
 ---
 
-## Screenshots
+## 2. Screenshots
 
 ![Welcome Banner & Theme](docs/screenshots/banner-colors.png)
 ![TOTP 2FA QR Code Setup](docs/screenshots/qr-2fa-setup.png)
 ![Account Lockout Alert](docs/screenshots/lockout.png)
-![Formatted User Details](docs/screenshots/whoami-detail.png)
+![MFA-Enabled User Details](docs/screenshots/whoami-mfa-enabled.png)
 ![Docker Compose Containerized Execution](docs/screenshots/docker-compose-up.png)
 
 ---
 
-## Architecture
+## 3. Architecture
 
 ```text
 secure-auth-cli/
 ├── cmd/
 │   └── cli/
-│       └── main.go           # CLI application entrypoint & startup initialization
+│       └── main.go           # Application entrypoint & dependency wiring
 ├── internal/
-│   ├── auth/                 # User registration, bcrypt password hashing, login, & lockout
+│   ├── auth/                 # User registration, bcrypt hashing, login, & lockout state
 │   ├── db/                   # Pure-Go SQLite connection pool & embedded SQL migration runner
 │   ├── session/              # 32-byte token generation, validation, & lazy session cleanup
 │   ├── shell/                # Interactive REPL shell, readline integration, & command routing
@@ -46,37 +46,26 @@ secure-auth-cli/
 └── go.sum                    # Dependency checksum manifest
 ```
 
-### Subpackage Responsibilities (`internal/`)
+### Internal Package Purposes (`internal/`)
 - `internal/auth`: Manages user credentials, bcrypt password hashing (cost 10), login verification, and failed attempt lockout tracking.
-- `internal/db`: Initializes pure-Go SQLite connections (`modernc.org/sqlite`) and executes embedded SQL migrations idempotently.
-- `internal/session`: Generates cryptographically secure 32-byte session tokens, handles expiration validation, and performs lazy session deletion.
-- `internal/shell`: Drives the interactive Read-Eval-Print Loop (REPL), readline line editing, colored feedback, numeric shortcuts, and context-aware help menus.
 - `internal/totp`: Generates base32 TOTP secrets, renders terminal ANSI QR codes (`qrterminal/v3`), and validates 6-digit 2FA codes (`pquerna/otp`).
+- `internal/session`: Generates cryptographically secure 32-byte session tokens, handles expiration validation, and performs lazy session deletion.
+- `internal/db`: Initializes pure-Go SQLite connections (`modernc.org/sqlite`) and executes embedded SQL migrations idempotently.
+- `internal/shell`: Drives the interactive Read-Eval-Print Loop (REPL), readline line editing, colored feedback, numeric shortcuts, and context-aware help menus.
 
 ---
 
-## Setup
+## 4. Setup
 
-### Environment Variables & Defaults
+### Docker (Primary Path)
 
-| Variable | Default | Description |
-| :--- | :--- | :--- |
-| `DB_PATH` | `./data/auth.db` | Path to the SQLite database file |
-| `SESSION_TIMEOUT_MINUTES` | `15` | Session token validity duration in minutes |
-| `LOCKOUT_THRESHOLD` | `5` | Failed login attempts allowed before account lockout |
-| `LOCKOUT_DURATION_MINUTES` | `15` | Account lockout duration in minutes |
-
----
-
-### Docker Path (Recommended)
-
-Run the application inside a multi-stage, containerized Alpine environment with persistent volume storage:
+Run the application inside a containerized Alpine environment with persistent volume storage. **Note**: The container must be executed attached (without `-d`) because `secure-auth-cli` is an interactive TTY application.
 
 ```bash
-docker compose run --rm secure-auth-cli
+docker-compose up --build
 ```
 
-**Build Output:**
+**Captured Terminal Output:**
 ```text
 [+] Building 23.5s (18/18) FINISHED
  => [internal] load build definition from Dockerfile
@@ -109,42 +98,48 @@ cd secure-auth-cli
 go run cmd/cli/main.go
 ```
 
-**Output:**
+**Environment Variables & Defaults:**
+
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `DB_PATH` | `./data/auth.db` | Path to SQLite database file |
+| `SESSION_TIMEOUT_MINUTES` | `15` | Active session token validity duration in minutes |
+| `LOCKOUT_THRESHOLD` | `5` | Failed login attempts allowed before account lockout |
+| `LOCKOUT_DURATION_MINUTES` | `15` | Account lockout duration in minutes |
+
+---
+
+## 5. Live Walkthrough
+
+Below is one continuous real session transcript executed against the application in exact order:
+
 ```text
+a. Pre-login help snippet:
+auth> help
+Available Commands (enter number or command name):
+  1.  register       - Register a new user account
+  2.  login          - Login with username and password (+ 2FA if enabled)
+  3.  help           - Display this context-aware help menu
+  4.  exit           - Quit the application
+
+b. Launch app & Register alice:
 === Secure Auth CLI ===
 Containerized CLI authentication system with optional 2FA and session management
 
 Database ready
 
-auth> 
-```
-
----
-
-## Feature Walkthroughs
-
-### a. User Registration
-
-**Success Case:**
-```text
 auth> register alice
 Enter password: 
 Registration successful! You can now log in using 'login'.
 ```
+![Welcome Banner & Theme](docs/screenshots/banner-colors.png)
 
-**Duplicate Username Rejection (Immediate pre-password check):**
 ```text
+c. Register alice again (immediate duplicate rejection before password prompt):
 auth> register alice
 Error: user 'alice' already exists. Try logging in using 'login alice'
-```
 
----
-
-### b. User Login & Auto-Displayed Session Details
-
-Logging in automatically displays the styled user details block upon success:
-
-```text
+d. Login as alice (auto-displayed detail block, MFA Disabled):
 auth> login alice
 Enter password: 
 Logged in as alice
@@ -156,26 +151,95 @@ Logged in as alice
   Last Login:          2026-07-31 15:10:44 IST
 
 alice@auth> 
+
+e. Context-aware help (post-login):
+alice@auth> help
+Available Commands (enter number or command name):
+  1.  whoami         - Display active user session details
+  2.  enable-2fa     - Enable TOTP 2FA multi-factor authentication
+  3.  disable-2fa    - Disable TOTP 2FA multi-factor authentication
+  4.  logout         - End current active user session
+  5.  help           - Display this context-aware help menu
+  6.  exit           - Quit the application
+
+f. whoami command:
+alice@auth> whoami
+
+  Username:            alice
+  Registered:          2026-07-31 15:10:09 IST
+  MFA Status:          Disabled
+  Session Expires:     2026-07-31 15:25:44 IST
+  Last Login:          2026-07-31 15:10:44 IST
+
+g. Enable 2FA (password re-authentication, QR code rendering, secret key, passcode verification):
+alice@auth> enable-2fa
+Enter your current password to confirm enabling 2FA: 
+
+Scan the QR code below with your authenticator app (Google Authenticator / Authy):
+▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+█ ▄▄▄▄▄ ██▀▀█ █  ▄▀▀  ▀▄ ▀▀▀  ▀▀ ▀█ ▄▄▄▄▄ █
+█ █   █ █▄▀ ▄█▀▀ ▀▀ ▀ ▀▀ ██▄█ █▄ ▄█ █   █ █
+█ █▄▄▄█ ████ ▄█▀▀█▀▄▀█▄▀▀█▄█ ▀▀▀ ▀█ █▄▄▄█ █
+█▄▄▄▄▄▄▄█ █ ▀▄▀▄▀▄▀ ▀▄▀ ▀ ▀▄▀ ▀ █ █▄▄▄▄▄▄▄█
+█▄  █ ▄▄▄ ██▀▄ █▄█▄▄▀  ▀▄ ▄█▀ ▄▀▄ ▄ ██▀▄█▀█
+█▄▄▀▀██▄ ██▀ ▄▀█▀▀ ▄▀▄ █▀ ▀▀▀ ▀▀▀▀ █▄▀█▄▄▄█
+█▄█▄██▄▄█▀ █▄▀▄▀▄▀▄█▄█ █▄█ ██  ▀▀ ▄▄▄ ▄█▀ █
+█ ▄▄▄▄▄ █  ▀▀▀▄█▀█ ▀▀▀  ▀▀  ▀  █  █▄█ █▄▄ █
+█ █   █ █▄▄▀▀█▀█▄█▀█  ██▀ ▀██  ▀▀▄▄▄▄ ██▀▄█
+█ █▄▄▄█ █ ▀▄▀█▀▀▀  ▀▀█▀▄█▀  ██▀▀▀  █▀▄▄▄▀██
+█▄▄▄▄▄▄▄█▄█▄█▄▄██▄▄██▄▄██▄▄███▄█▄▄█▄██▄█▄▄█
+Secret Key (manual entry): QQKGB47LAVQD3AAV3PTJNNGD2Y3HWTHR
+
+Enter the 6-digit code from your authenticator app to confirm: 178904
+2FA enabled successfully!
+```
+![TOTP 2FA QR Code Setup](docs/screenshots/qr-2fa-setup.png)
+
+```text
+h. Logout:
+alice@auth> logout
+Logged out successfully.
+
+i. Login as alice with 2FA enabled (prompts for TOTP code, auto-display shows MFA Status: Enabled):
+auth> login alice
+Enter password: 
+Enter your 6-digit authenticator code: 178904
+Logged in as alice
+
+  Username:            alice
+  Registered:          2026-07-31 15:10:09 IST
+  MFA Status:          Enabled
+  Session Expires:     2026-07-31 15:30:00 IST
+  Last Login:          2026-07-31 15:15:00 IST
+```
+![MFA-Enabled User Details](docs/screenshots/whoami-mfa-enabled.png)
+
+```text
+j. Disable 2FA (requires password re-authentication):
+alice@auth> disable-2fa
+Enter your current password to confirm disabling 2FA: 
+2FA disabled successfully.
+
+k. Logout and Exit:
+alice@auth> logout
+Logged out successfully.
+
+auth> exit
+Goodbye!
 ```
 
 ---
 
-### c. Wrong Password Rejection
+## 6. Additional Verification
 
-Returns a generic credentials error without leaking account existence:
-
+### Wrong Password Rejection
 ```text
 auth> login alice
 Enter password: 
 Error: invalid username or password. Please check your credentials and try again.
 ```
 
----
-
-### d. Account Lockout Protection
-
-Failing 5 consecutive login attempts locks the account and displays the unlock timestamp:
-
+### Account Lockout Protection
 ```text
 auth> login alice
 Enter password: 
@@ -185,75 +249,9 @@ auth> login alice
 Enter password: 
 Error: account is locked due to multiple failed login attempts. Try again after 15:26:18 IST
 ```
+![Account Lockout Alert](docs/screenshots/lockout.png)
 
----
-
-### e. Enabling TOTP 2FA
-
-Requires password re-authentication, renders terminal QR code, prints base32 secret, and validates passcode before persisting:
-
-```text
-alice@auth> enable-2fa
-Enter your current password to confirm enabling 2FA: 
-
-Scan the QR code below with your authenticator app (Google Authenticator / Authy):
-▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
-█ ▄▄▄▄▄ ██ ██  ▄ ▄▀▀  ▄  ▀▀▀  ▀▀ ▀█ ▄▄▄▄▄ █
-█ █   █ █▄ ▄▄▀▀▀ ▀▀▀▀▄▀▀ ██▄█ █▄ ▄█ █   █ █
-█ █▄▄▄█ ████▀██ ▀▀▀▄▀█▄ ▀▀▄█ ▀▀▀ ▀█ █▄▄▄█ █
-█▄▄▄▄▄▄▄█ █ █ ▀▄▀▄▀ █ ▀ █▄▀▄▀ ▀ █ █▄▄▄▄▄▄▄█
-█   █▄▄▄▄ ▀█ ▄ ███▄▄   ▀█ ▄█▀ ▄▀▄ ▄ ██▀▄█▀█
-█  ▀▀▀▀▄ █▀█ ▄  ▀▀  ▀▄ █▀ ▀▀▀ ▀▀▀▀ █▄▀█▄▄▄█
-█▄█▄██▄▄█▀ █▄▀▄▀▄▀▄█▄█ █▄█ ██  ▀▀ ▄▄▄ ▄█▀ █
-█ ▄▄▄▄▄ █  ▄▀▀▄█▀█  ▀▀ ▄▀▀▀▀▀  █  █▄█ █▄▄ █
-█ █   █ █▄█▀▀█▀█      █▀▀   █  ▀▀▄▄▄▄ ██▀▄█
-█ █▄▄▄█ █ ▀▄▀█▀▀█  ▀▀ ▀▄▀▀  ██▀▀▀  █▀▄▄▄▀██
-█▄▄▄▄▄▄▄█▄█▄█▄▄██▄▄██▄▄██▄▄███▄█▄▄█▄██▄█▄▄█
-Secret Key (manual entry): ZME5IJESOFOD2TOHFNEKW2K6NZSQYC3L
-
-Enter the 6-digit code from your authenticator app to confirm: 593321
-2FA enabled successfully!
-```
-
----
-
-### f. Login with TOTP 2FA
-
-Prompting for 6-digit authenticator code after successful password verification:
-
-```text
-auth> login alice
-Enter password: 
-Enter your 6-digit authenticator code: 037863
-Logged in as alice
-
-  Username:            alice
-  Registered:          2026-07-31 15:10:09 IST
-  MFA Status:          Enabled
-  Session Expires:     2026-07-31 15:30:00 IST
-  Last Login:          2026-07-31 15:15:00 IST
-
-alice@auth> 
-```
-
----
-
-### g. Disabling 2FA
-
-Requires password re-authentication before clearing 2FA secret:
-
-```text
-alice@auth> disable-2fa
-Enter your current password to confirm disabling 2FA: 
-2FA disabled successfully.
-```
-
----
-
-### h. Lazy Session Expiration
-
-Rejects expired session tokens on command execution and resets prompt to `auth>`:
-
+### Session Expiration Rejection
 ```text
 alice@auth> whoami
 Error: session expired or invalid, please log in again
@@ -261,63 +259,21 @@ Error: session expired or invalid, please log in again
 auth> 
 ```
 
----
-
-### i. User Logout
-
-Terminates session record in database and returns prompt to `auth>`:
-
-```text
-alice@auth> logout
-Logged out successfully.
-
-auth> 
-```
-
----
-
-### j. Context-Aware Help Menu
-
-**Pre-Login Help (`auth>`):**
-```text
-auth> help
-Available Commands (enter number or command name):
-  1.  register       - Register a new user account
-  2.  login          - Login with username and password (+ 2FA if enabled)
-  3.  help           - Display this context-aware help menu
-  4.  exit           - Quit the application
-```
-
-**Post-Login Help (`alice@auth>`):**
-```text
-alice@auth> help
-Available Commands (enter number or command name):
-  1.  whoami         - Display active user session details
-  2.  enable-2fa     - Enable TOTP 2FA multi-factor authentication
-  3.  disable-2fa    - Disable TOTP 2FA multi-factor authentication
-  4.  logout         - End current active user session
-  5.  help           - Display this context-aware help menu
-  6.  exit           - Quit the application
-```
-
----
-
-### k. Docker Compose Persistence Demonstration
-
+### Docker Compose Persistence Demonstration
 ```bash
-# Step 1: Register user inside container
-docker compose run --rm secure-auth-cli
+# Step 1: Launch attached container and register user
+docker-compose up --build
 auth> register dockeruser
 Enter password: Pass1234!
 Registration successful! You can now log in using 'login'.
 auth> exit
 
 # Step 2: Tear down container network
-docker compose down
+docker-compose down
 Network secure-auth-cli_default Removed
 
-# Step 3: Re-launch container and verify login persistence
-docker compose run --rm secure-auth-cli
+# Step 3: Re-launch attached container and verify login persistence
+docker-compose up
 auth> login dockeruser
 Enter password: Pass1234!
 Logged in as dockeruser
@@ -328,12 +284,13 @@ Logged in as dockeruser
   Session Expires:     2026-07-31 10:01:17 UTC
   Last Login:          2026-07-31 09:46:17 UTC
 ```
+![Docker Compose Containerized Execution](docs/screenshots/docker-compose-up.png)
 
 ---
 
-## Command Reference
+## 7. Command Reference
 
-| Command | Numeric Shortcut | Availability | Description |
+| Command | Shortcut | Mode | Description |
 | :--- | :---: | :---: | :--- |
 | `register [username]` | `1` | Pre-Login | Registers a new user account with bcrypt password hashing |
 | `login [username]` | `2` | Pre-Login | Authenticates user credentials and checks TOTP if enabled |
@@ -342,29 +299,29 @@ Logged in as dockeruser
 | `disable-2fa` | `3` | Post-Login | Requires password re-authentication and disables 2FA |
 | `logout` | `4` | Post-Login | Ends active session in database and resets prompt to `auth>` |
 | `help` | `3` / `5` | All States | Displays context-aware command descriptions and shortcuts |
-| `exit` | `4` / `6` | All States | Terminates interactive session cleanly |
+| `exit` | `4` / `6` | All States | Terminates interactive session cleanly (added convenience) |
 
 ---
 
-## Security Design Notes
+## 8. Security Design Notes
 
 - **Password Storage**: Uses `golang.org/x/crypto/bcrypt` with a cost factor of `10`. Plaintext passwords are never stored or logged.
 - **Account Lockout**: Failed attempts increment `failed_login_attempts`. Crossing `LOCKOUT_THRESHOLD` (5) locks the account (`locked_until = now + 15m`). `locked_until` is checked BEFORE performing bcrypt hash comparisons to prevent CPU exhaustion attacks.
-- **Session Tokens**: Generates 32-byte cryptographically secure random data (`crypto/rand`) hex-encoded as a 64-character token. Tokens are stored in SQLite and validated on every post-login command execution.
-- **RFC 6238 TOTP 2FA**: Uses `github.com/pquerna/otp/totp` with a standard 30-second step window and clock-skew tolerance. Implements a confirm-before-enable security pattern requiring passcode confirmation before persisting the secret.
+- **Session Design**: Generates 32-byte cryptographically secure random data (`crypto/rand`) hex-encoded as a 64-character token. State is stored in SQLite and validated on every post-login command execution (lazy validation). Stateful tokens were selected over stateless JWTs to support immediate session revocation on logout.
+- **RFC 6238 TOTP 2FA**: Uses `github.com/pquerna/otp/totp` with a standard 30-second step window and clock-skew tolerance. Implements a confirm-before-enable security pattern requiring passcode confirmation before persisting the secret. Password re-authentication is mandatory for both enabling and disabling 2FA.
 
 ---
 
-## Design Decisions
+## 9. Design Decisions
 
-- **Pure-Go SQLite (`modernc.org/sqlite`)**: Selected over `mattn/go-sqlite3` to eliminate CGo compiler requirements (`CGO_ENABLED=0`), enabling lightweight multi-stage Docker compilation without GCC in the container.
-- **Embedded Migrations (`go:embed`)**: DDL SQL migrations (`migrations/0001_init.sql`) are embedded directly into the binary at compile time, guaranteeing schema idempotency without external migration tools.
+- **Pure-Go SQLite (`modernc.org/sqlite`)**: Selected over MySQL/PostgreSQL to eliminate external container dependencies and CGo requirements (`CGO_ENABLED=0`), enabling lightweight multi-stage Docker compilation without GCC in the container.
+- **Embedded Migrations (`go:embed`)**: DDL SQL migrations (`migrations/0001_init.sql`) are embedded directly into the binary at compile time, guaranteeing schema idempotency without external migration frameworks like `golang-migrate`.
 - **Minimal Alpine Runtime**: `alpine:latest` was selected for the final stage to include runtime CA certificates (`ca-certificates`) and timezone databases (`tzdata`) while keeping final image size under 35 MB.
 - **Unit & E2E Test Suite**: Built unit tests for `auth`, `session`, and `totp` alongside a scenario-based `expect` test harness to ensure cross-platform test coverage.
 
 ---
 
-## Testing
+## 10. Testing
 
 ### Automated Unit Tests
 
@@ -374,7 +331,7 @@ Run all unit tests across internal packages:
 go test -v ./...
 ```
 
-**Test Output:**
+**Captured Test Output:**
 ```text
 === RUN   TestRegister
 --- PASS: TestRegister (0.16s)
@@ -400,11 +357,4 @@ ok  	secure-auth-cli/internal/totp	1.100s
 
 ### End-to-End Expect Test Harness ([tests/e2e_tests.sh](file:///c:/Users/wayal/Desktop/Sentry%20CLI/secure-auth-cli/tests/e2e_tests.sh))
 
-The repository includes a 18-scenario POSIX Bash test harness driven by `expect` for interactive TTY verification:
-
-```bash
-chmod +x tests/e2e_tests.sh
-./tests/e2e_tests.sh
-```
-
-**Coverage**: Registers users, checks duplicate rejections, validates login, triggers lockout, verifies 2FA setup and passcode rejection, checks session timeouts, and confirms clean exit codes.
+The repository includes an 18-scenario POSIX Bash test harness driven by `expect` for interactive TTY verification (`chmod +x tests/e2e_tests.sh && ./tests/e2e_tests.sh`), covering the full CLI user flow across registration, login, lockout, 2FA, session expiration, and clean termination.
