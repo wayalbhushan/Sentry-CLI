@@ -88,6 +88,59 @@ func GetUserByID(db *sql.DB, id int64) (*User, error) {
 	return &user, nil
 }
 
+// VerifyPassword compares a plaintext password against a stored bcrypt hash.
+func VerifyPassword(hash, password string) bool {
+	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
+}
+
+// RecordFailedAttempt increments failed login counter for a user and locks the account if threshold is reached.
+func RecordFailedAttempt(db *sql.DB, userID int64) error {
+	lockoutThreshold := getEnvInt("LOCKOUT_THRESHOLD", DefaultLockoutThreshold)
+	lockoutDurationMinutes := getEnvInt("LOCKOUT_DURATION_MINUTES", DefaultLockoutDurationMinutes)
+
+	var failedAttempts int
+	err := db.QueryRow("SELECT failed_login_attempts FROM users WHERE id = ?", userID).Scan(&failedAttempts)
+	if err != nil {
+		return fmt.Errorf("failed to query login attempts: %w", err)
+	}
+
+	now := time.Now().UTC()
+	newAttempts := failedAttempts + 1
+
+	if newAttempts >= lockoutThreshold {
+		lockedUntil := now.Add(time.Duration(lockoutDurationMinutes) * time.Minute)
+		updateSQL := `UPDATE users SET failed_login_attempts = 0, locked_until = ? WHERE id = ?;`
+		if _, execErr := db.Exec(updateSQL, lockedUntil, userID); execErr != nil {
+			return fmt.Errorf("failed to set account lockout: %w", execErr)
+		}
+	} else {
+		updateSQL := `UPDATE users SET failed_login_attempts = ? WHERE id = ?;`
+		if _, execErr := db.Exec(updateSQL, newAttempts, userID); execErr != nil {
+			return fmt.Errorf("failed to record failed login attempt: %w", execErr)
+		}
+	}
+
+	return nil
+}
+
+// Enable2FA persists the TOTP secret and sets totp_enabled=1 for the specified user.
+func Enable2FA(db *sql.DB, userID int64, secret string) error {
+	updateSQL := `UPDATE users SET totp_secret = ?, totp_enabled = 1 WHERE id = ?;`
+	if _, err := db.Exec(updateSQL, secret, userID); err != nil {
+		return fmt.Errorf("failed to enable 2FA in database: %w", err)
+	}
+	return nil
+}
+
+// Disable2FA clears the TOTP secret and sets totp_enabled=0 for the specified user.
+func Disable2FA(db *sql.DB, userID int64) error {
+	updateSQL := `UPDATE users SET totp_secret = NULL, totp_enabled = 0 WHERE id = ?;`
+	if _, err := db.Exec(updateSQL, userID); err != nil {
+		return fmt.Errorf("failed to disable 2FA in database: %w", err)
+	}
+	return nil
+}
+
 // Register creates a new user account with a bcrypt hashed password.
 func Register(db *sql.DB, username, password string) error {
 	username = strings.TrimSpace(username)
@@ -188,6 +241,12 @@ func Login(db *sql.DB, username, password string) (*User, error) {
 		return nil, errors.New("invalid username or password. Please check your credentials and try again.")
 	}
 
+	// If user has TOTP enabled, return user struct without clearing failed attempts or setting last_login_at yet.
+	// The TOTP verification step will finish authentication.
+	if user.TOTPEnabled {
+		return &user, nil
+	}
+
 	// On successful password match: reset failed login attempts, clear lockout, update last login time
 	updateSuccessSQL := `UPDATE users SET failed_login_attempts = 0, locked_until = NULL, last_login_at = ? WHERE id = ?;`
 	if _, execErr := db.Exec(updateSuccessSQL, now, user.ID); execErr != nil {
@@ -199,4 +258,19 @@ func Login(db *sql.DB, username, password string) (*User, error) {
 	user.LastLoginAt = sql.NullTime{Time: now, Valid: true}
 
 	return &user, nil
+}
+
+// CompleteLoginFinalize updates last login time and resets failed attempts after successful TOTP validation.
+func CompleteLoginFinalize(db *sql.DB, user *User) error {
+	now := time.Now().UTC()
+	updateSuccessSQL := `UPDATE users SET failed_login_attempts = 0, locked_until = NULL, last_login_at = ? WHERE id = ?;`
+	if _, execErr := db.Exec(updateSuccessSQL, now, user.ID); execErr != nil {
+		return fmt.Errorf("failed to update login success metadata: %w", execErr)
+	}
+
+	user.FailedLoginAttempts = 0
+	user.LockedUntil = sql.NullTime{Valid: false}
+	user.LastLoginAt = sql.NullTime{Time: now, Valid: true}
+
+	return nil
 }
