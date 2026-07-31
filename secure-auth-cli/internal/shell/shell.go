@@ -17,10 +17,11 @@ import (
 
 // Shell encapsulates the state and dependencies of the interactive CLI session.
 type Shell struct {
-	db           *sql.DB
-	rl           *readline.Instance
-	currentUser  *auth.User
-	sessionToken string
+	db             *sql.DB
+	rl             *readline.Instance
+	currentUser    *auth.User
+	currentSession *session.Session
+	sessionToken   string
 
 	promptColor   func(a ...interface{}) string
 	statusColor   func(format string, a ...interface{}) string
@@ -99,15 +100,17 @@ func (s *Shell) checkSession() bool {
 		return false
 	}
 
-	_, err := session.ValidateSession(s.db, s.sessionToken)
+	sess, err := session.ValidateSession(s.db, s.sessionToken)
 	if err != nil {
 		fmt.Println(s.errorColor("Error: %v", err))
 		s.sessionToken = ""
+		s.currentSession = nil
 		s.currentUser = nil
 		s.updatePrompt()
 		return false
 	}
 
+	s.currentSession = sess
 	return true
 }
 
@@ -149,8 +152,39 @@ func (s *Shell) readInput(promptLabel string) (string, error) {
 	return strings.TrimSpace(line), nil
 }
 
-// dispatchCommand routes user input commands to their respective handlers.
+// dispatchCommand routes user input commands or numeric selection to handlers.
 func (s *Shell) dispatchCommand(cmd string, args []string) {
+	isLoggedIn := s.sessionToken != "" && s.checkSession()
+
+	// Map numeric choices to command names based on current authentication state
+	if isLoggedIn {
+		switch cmd {
+		case "1":
+			cmd = "whoami"
+		case "2":
+			cmd = "enable-2fa"
+		case "3":
+			cmd = "disable-2fa"
+		case "4":
+			cmd = "logout"
+		case "5":
+			cmd = "help"
+		case "6":
+			cmd = "exit"
+		}
+	} else {
+		switch cmd {
+		case "1":
+			cmd = "register"
+		case "2":
+			cmd = "login"
+		case "3":
+			cmd = "help"
+		case "4":
+			cmd = "exit"
+		}
+	}
+
 	switch cmd {
 	case "help":
 		s.handleHelp()
@@ -218,23 +252,51 @@ func (s *Shell) dispatchCommand(cmd string, args []string) {
 	}
 }
 
-// handleHelp displays commands appropriate for current session state.
+// handleHelp displays context-aware commands with numeric shortcuts and descriptions.
 func (s *Shell) handleHelp() {
 	isLoggedIn := s.sessionToken != "" && s.checkSession()
-	fmt.Println(s.infoColor("Available commands:"))
+	fmt.Println(s.infoColor("Available Commands (enter number or command name):"))
 	if !isLoggedIn {
-		fmt.Println("  register     - Register a new user account")
-		fmt.Println("  login        - Login with username and password (+ 2FA if enabled)")
-		fmt.Println("  help         - Display this help menu")
-		fmt.Println("  exit         - Quit the application")
+		fmt.Printf("  %-3s %-14s - %s\n", "1.", "register", "Register a new user account")
+		fmt.Printf("  %-3s %-14s - %s\n", "2.", "login", "Login with username and password (+ 2FA if enabled)")
+		fmt.Printf("  %-3s %-14s - %s\n", "3.", "help", "Display this context-aware help menu")
+		fmt.Printf("  %-3s %-14s - %s\n", "4.", "exit", "Quit the application")
 	} else {
-		fmt.Println("  whoami       - Display active user session details")
-		fmt.Println("  enable-2fa   - Enable TOTP 2FA multi-factor authentication")
-		fmt.Println("  disable-2fa  - Disable TOTP 2FA multi-factor authentication")
-		fmt.Println("  logout       - End current session")
-		fmt.Println("  help         - Display this help menu")
-		fmt.Println("  exit         - Quit the application")
+		fmt.Printf("  %-3s %-14s - %s\n", "1.", "whoami", "Display active user session details")
+		fmt.Printf("  %-3s %-14s - %s\n", "2.", "enable-2fa", "Enable TOTP 2FA multi-factor authentication")
+		fmt.Printf("  %-3s %-14s - %s\n", "3.", "disable-2fa", "Disable TOTP 2FA multi-factor authentication")
+		fmt.Printf("  %-3s %-14s - %s\n", "4.", "logout", "End current active user session")
+		fmt.Printf("  %-3s %-14s - %s\n", "5.", "help", "Display this context-aware help menu")
+		fmt.Printf("  %-3s %-14s - %s\n", "6.", "exit", "Quit the application")
 	}
+	fmt.Println()
+}
+
+// printUserDetails renders a clean, padded block of active user session details.
+func (s *Shell) printUserDetails(user *auth.User, sess *session.Session) {
+	if user == nil {
+		return
+	}
+	fmt.Println()
+	fmt.Printf("  %-20s %s\n", "Username:", user.Username)
+	fmt.Printf("  %-20s %s\n", "Registered:", user.CreatedAt.Local().Format("2006-01-02 15:04:05 MST"))
+
+	if user.TOTPEnabled {
+		fmt.Printf("  %-20s %s\n", "MFA Status:", color.New(color.FgGreen, color.Bold).Sprint("Enabled"))
+	} else {
+		fmt.Printf("  %-20s %s\n", "MFA Status:", color.New(color.FgYellow, color.Bold).Sprint("Disabled"))
+	}
+
+	if sess != nil {
+		fmt.Printf("  %-20s %s\n", "Session Expires:", sess.ExpiresAt.Local().Format("2006-01-02 15:04:05 MST"))
+	}
+
+	if user.LastLoginAt.Valid {
+		fmt.Printf("  %-20s %s\n", "Last Login:", user.LastLoginAt.Time.Local().Format("2006-01-02 15:04:05 MST"))
+	} else {
+		fmt.Printf("  %-20s %s\n", "Last Login:", "This is your first login")
+	}
+	fmt.Println()
 }
 
 // handleRegister prompts for credentials and registers a new user.
@@ -341,10 +403,12 @@ func (s *Shell) handleLogin(args []string) {
 	}
 
 	s.sessionToken = sess.Token
+	s.currentSession = sess
 	s.currentUser = user
 	s.updatePrompt()
 
 	fmt.Println(s.statusColor("Logged in as %s", user.Username))
+	s.printUserDetails(user, sess)
 }
 
 // handleEnable2FA verifies current password, generates TOTP secret, renders terminal QR code, and confirms passcode before persisting.
@@ -428,19 +492,7 @@ func (s *Shell) handleDisable2FA() {
 
 // handleWhoAmI displays details of the currently logged-in user.
 func (s *Shell) handleWhoAmI() {
-	if s.currentUser == nil {
-		return
-	}
-	fmt.Printf("Logged in as: %s\n", s.currentUser.Username)
-	fmt.Printf("Registered on: %s\n", s.currentUser.CreatedAt.Local().Format("2006-01-02 15:04:05"))
-	if s.currentUser.LastLoginAt.Valid {
-		fmt.Printf("Last login: %s\n", s.currentUser.LastLoginAt.Time.Local().Format("2006-01-02 15:04:05"))
-	}
-	if s.currentUser.TOTPEnabled {
-		fmt.Printf("MFA Status: %s\n", color.New(color.FgGreen, color.Bold).Sprint("Enabled"))
-	} else {
-		fmt.Printf("MFA Status: %s\n", color.New(color.FgYellow, color.Bold).Sprint("Disabled"))
-	}
+	s.printUserDetails(s.currentUser, s.currentSession)
 }
 
 // handleLogout ends the active user session in database and resets shell state.
@@ -449,6 +501,7 @@ func (s *Shell) handleLogout() {
 		_ = session.Logout(s.db, s.sessionToken)
 	}
 	s.sessionToken = ""
+	s.currentSession = nil
 	s.currentUser = nil
 	s.updatePrompt()
 	fmt.Println(s.statusColor("Logged out successfully."))
