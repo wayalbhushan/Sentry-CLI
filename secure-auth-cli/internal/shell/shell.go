@@ -347,10 +347,21 @@ func (s *Shell) handleLogin(args []string) {
 	fmt.Println(s.statusColor("Logged in as %s", user.Username))
 }
 
-// handleEnable2FA generates TOTP secret, renders terminal QR code, and confirms passcode before persisting.
+// handleEnable2FA verifies current password, generates TOTP secret, renders terminal QR code, and confirms passcode before persisting.
 func (s *Shell) handleEnable2FA() {
 	if s.currentUser.TOTPEnabled {
 		fmt.Println(s.infoColor("2FA is already enabled for this account."))
+		return
+	}
+
+	password, err := s.readPassword("Enter your current password to confirm enabling 2FA: ")
+	if err != nil {
+		fmt.Println(s.errorColor("Error: Failed to read password: %v", err))
+		return
+	}
+
+	if !auth.VerifyPassword(s.currentUser.PasswordHash, password) {
+		fmt.Println(s.errorColor("Error: Incorrect password. 2FA setup cancelled."))
 		return
 	}
 
