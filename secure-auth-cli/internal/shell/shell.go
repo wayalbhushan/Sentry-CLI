@@ -20,6 +20,7 @@ type Shell struct {
 	currentUser *auth.User
 	isLoggedIn  bool
 
+	promptColor   func(a ...interface{}) string
 	statusColor   func(format string, a ...interface{}) string
 	errorColor    func(format string, a ...interface{}) string
 	farewellColor func(format string, a ...interface{}) string
@@ -31,6 +32,7 @@ func New(db *sql.DB, rl *readline.Instance) *Shell {
 		db: db,
 		rl: rl,
 
+		promptColor:   color.New(color.FgCyan, color.Bold).SprintFunc(),
 		statusColor:   color.New(color.FgGreen).SprintfFunc(),
 		errorColor:    color.New(color.FgRed).SprintfFunc(),
 		farewellColor: color.New(color.FgGreen).SprintfFunc(),
@@ -85,13 +87,18 @@ func (s *Shell) updatePrompt() {
 	}
 }
 
-// readPassword prompts for a password with masked terminal echo.
+// readPassword prompts for a password with a visible prompt and masked terminal echo.
 // Supports both interactive TTY raw mode and piped stdin fallbacks.
-func (s *Shell) readPassword(prompt string) (string, error) {
-	passBytes, err := s.rl.ReadPassword(prompt)
+func (s *Shell) readPassword(promptLabel string) (string, error) {
+	if promptLabel != "" {
+		fmt.Print(s.promptColor(promptLabel))
+	}
+
+	passBytes, err := s.rl.ReadPassword("")
 	if err != nil && err != io.EOF {
 		return "", err
 	}
+
 	password := strings.TrimSpace(string(passBytes))
 	if password == "" {
 		// Fallback to reading next line if ReadPassword returns empty in non-TTY pipe environments
@@ -101,6 +108,7 @@ func (s *Shell) readPassword(prompt string) (string, error) {
 		}
 		password = strings.TrimSpace(line)
 	}
+
 	return password, nil
 }
 
@@ -174,7 +182,7 @@ func (s *Shell) handleRegister(args []string) {
 	if len(args) > 0 {
 		username = args[0]
 	} else {
-		s.rl.SetPrompt("Username: ")
+		fmt.Print(s.promptColor("Enter username: "))
 		line, err := s.rl.Readline()
 		s.updatePrompt()
 		if err != nil {
@@ -188,7 +196,7 @@ func (s *Shell) handleRegister(args []string) {
 		return
 	}
 
-	password, err := s.readPassword("Password: ")
+	password, err := s.readPassword("Enter password: ")
 	if err != nil {
 		fmt.Println(s.errorColor("Failed to read password: %v", err))
 		return
@@ -208,7 +216,7 @@ func (s *Shell) handleLogin(args []string) {
 	if len(args) > 0 {
 		username = args[0]
 	} else {
-		s.rl.SetPrompt("Username: ")
+		fmt.Print(s.promptColor("Enter username: "))
 		line, err := s.rl.Readline()
 		s.updatePrompt()
 		if err != nil {
@@ -222,7 +230,7 @@ func (s *Shell) handleLogin(args []string) {
 		return
 	}
 
-	password, err := s.readPassword("Password: ")
+	password, err := s.readPassword("Enter password: ")
 	if err != nil {
 		fmt.Println(s.errorColor("Failed to read password: %v", err))
 		return
