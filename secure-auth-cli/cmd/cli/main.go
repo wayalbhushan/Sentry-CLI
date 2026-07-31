@@ -2,11 +2,10 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"os"
-	"strings"
 
 	"secure-auth-cli/internal/db"
+	"secure-auth-cli/internal/shell"
 
 	"github.com/ergochat/readline"
 	"github.com/fatih/color"
@@ -18,7 +17,6 @@ func main() {
 	bannerSub := color.New(color.FgHiBlue).SprintfFunc()
 	statusColor := color.New(color.FgGreen).SprintfFunc()
 	errorColor := color.New(color.FgRed).SprintfFunc()
-	farewellColor := color.New(color.FgGreen).SprintfFunc()
 
 	// Print welcome banner (app name + one-line description)
 	fmt.Println(bannerTitle("=== Secure Auth CLI ==="))
@@ -54,34 +52,10 @@ func main() {
 	}
 	defer rl.Close()
 
-	// Read-Eval-Print Loop (REPL)
-	for {
-		line, err := rl.Readline()
-		if err != nil {
-			if err == readline.ErrInterrupt {
-				// Gracefully handle Ctrl+C without panicking
-				if len(line) == 0 {
-					continue
-				}
-			} else if err == io.EOF {
-				// Gracefully handle Ctrl+D: farewell and exit
-				fmt.Println(farewellColor("Goodbye!"))
-				break
-			}
-			break
-		}
-
-		input := strings.TrimSpace(line)
-		if input == "" {
-			continue
-		}
-
-		if input == "exit" {
-			fmt.Println(farewellColor("Goodbye!"))
-			break
-		}
-
-		// Output unrecognized command message in red
-		fmt.Println(errorColor("unrecognized command: %s", input))
+	// Start interactive shell REPL
+	sh := shell.New(database, rl)
+	if err := sh.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Shell error: %v\n", err)
+		os.Exit(1)
 	}
 }
