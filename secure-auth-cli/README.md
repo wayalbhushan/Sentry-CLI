@@ -13,7 +13,8 @@
 ## 2. Screenshots
 
 ![Welcome Banner & Theme](docs/screenshots/banner-colors.png)
-![TOTP 2FA QR Code Setup](docs/screenshots/qr-2fa-setup.png)
+![MFA Setup - QR Code & Secret Key](docs/screenshots/qr-2fa-setup.png)
+![MFA Setup - Code Confirmation](docs/screenshots/qr-2fa-confirmation.png)
 ![Account Lockout Alert](docs/screenshots/lockout.png)
 ![MFA-Enabled User Details](docs/screenshots/whoami-mfa-enabled.png)
 ![Docker Compose Containerized Execution](docs/screenshots/docker-compose-up.png)
@@ -189,11 +190,14 @@ Scan the QR code below with your authenticator app (Google Authenticator / Authy
 █ █▄▄▄█ █ ▀▄▀█▀▀▀  ▀▀█▀▄█▀  ██▀▀▀  █▀▄▄▄▀██
 █▄▄▄▄▄▄▄█▄█▄█▄▄██▄▄██▄▄██▄▄███▄█▄▄█▄██▄█▄▄█
 Secret Key (manual entry): QQKGB47LAVQD3AAV3PTJNNGD2Y3HWTHR
+```
+![MFA Setup - QR Code & Secret Key](docs/screenshots/qr-2fa-setup.png)
 
+```text
 Enter the 6-digit code from your authenticator app to confirm: 178904
 2FA enabled successfully!
 ```
-![TOTP 2FA QR Code Setup](docs/screenshots/qr-2fa-setup.png)
+![MFA Setup - Code Confirmation](docs/screenshots/qr-2fa-confirmation.png)
 
 ```text
 h. Logout:
