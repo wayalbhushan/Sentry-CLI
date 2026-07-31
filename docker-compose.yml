@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  secure-auth-cli:
+    build:
+      context: ./secure-auth-cli
+      dockerfile: Dockerfile
+    image: secure-auth-cli:latest
+    container_name: secure-auth-cli
+    stdin_open: true
+    tty: true
+    environment:
+      - DB_PATH=/data/auth.db
+      - SESSION_TIMEOUT_MINUTES=${SESSION_TIMEOUT_MINUTES:-15}
+      - LOCKOUT_THRESHOLD=${LOCKOUT_THRESHOLD:-5}
+      - LOCKOUT_DURATION_MINUTES=${LOCKOUT_DURATION_MINUTES:-15}
+    volumes:
+      - auth-data:/data
+
+volumes:
+  auth-data:

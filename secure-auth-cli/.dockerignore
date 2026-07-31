@@ -1,0 +1,17 @@
+.git
+.github
+data/
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+.readline_history
+secure-auth-cli
+secure-auth-cli.exe
+*.exe
+.idea/
+.vscode/
+*.test
+*.out
