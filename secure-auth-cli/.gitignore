@@ -1,0 +1,33 @@
+# Compiled binaries
+/bin/
+/dist/
+secure-auth-cli
+secure-auth-cli.exe
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Local SQLite databases
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+/data/
+
+# Readline history files
+.readline_history
+
+# Go test binaries and coverage
+*.test
+*.out
+*.prof
+
+# IDE and OS metadata
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
